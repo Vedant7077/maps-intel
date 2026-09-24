@@ -2,10 +2,12 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from app.database import engine, SessionLocal, Base
-from subprocess import Popen
 import uuid
+import httpx
 from app.models import *
 import os
+
+SCRAPER_BASE_URL = os.getenv("SCRAPER_BASE_URL", "http://scraper-worker:8001")
 
 Base.metadata.create_all(bind=engine)
 
@@ -76,28 +78,33 @@ def dashboard(project_id: str, db: Session = Depends(get_db)):
 
 @app.post("/api/scrape/start")
 def start_scrape(competitor_id: str, project_id: str, db: Session = Depends(get_db)):
-    """Start a scraping job"""
+    """Start a scraping job by delegating to the scraper-worker container."""
     job_id = str(uuid.uuid4())
-    
+
     job = ScrapeJob(
         id=job_id,
         project_id=project_id,
         competitor_id=competitor_id,
-        status="running"
+        status="running",
     )
     db.add(job)
     db.commit()
-    
-    # Start scraper in background
-    env = os.environ.copy()
-    env["JOB_ID"] = job_id
-    
-    Popen([
-        "python", "-m", "scraper.main",
-        "--competitor_id", competitor_id,
-        "--project_id", project_id
-    ], env=env)
-    
+
+    try:
+        httpx.post(
+            f"{SCRAPER_BASE_URL}/api/scrape",
+            json={
+                "competitor_id": competitor_id,
+                "project_id": project_id,
+                "job_id": job_id,
+            },
+            timeout=10,
+        )
+    except httpx.RequestError as e:
+        job.status = "failed"
+        db.commit()
+        raise HTTPException(status_code=502, detail=f"Scraper unreachable: {e}")
+
     return {"job_id": job_id, "status": "started"}
 
 @app.get("/api/jobs/{job_id}")
