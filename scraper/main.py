@@ -34,6 +34,7 @@ def create_content_hash(post_url: str, post_text: str) -> str:
 def init_driver():
     """Initialize undetected Chrome driver using the distro-packaged Chromium."""
     CHROME_BIN = os.getenv("CHROME_BIN", "/usr/bin/chromium")
+    CHROMEDRIVER_PATH = os.getenv("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
     options = uc.ChromeOptions()
     options.binary_location = CHROME_BIN
     options.add_argument("--headless=new")
@@ -44,7 +45,11 @@ def init_driver():
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
-    driver = uc.Chrome(options=options, version_main=None)
+    driver = uc.Chrome(
+        options=options,
+        version_main=None,
+        driver_executable_path=CHROMEDRIVER_PATH,
+    )
     return driver
 
 
@@ -80,10 +85,11 @@ def notify_n8n(event_type: str, data: dict):
         return
 
     try:
+        print(f"Sending webhook to {webhook} ...")
         httpx.post(webhook, json=payload, timeout=10)
         print(f"[n8n] {event_type} webhook sent")
     except Exception as e:
-        print(f"[ERROR] Webhook failed: {e}")
+        print(f"[ERROR] Webhook failed ({webhook}): {e}")
 
 
 def parse_date(date_text: str) -> datetime:
@@ -189,15 +195,19 @@ def scrape_competitor(competitor_id: str, project_id: str, job_id: str | None):
 
     db = SessionLocal()
     competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
-    db.close()
 
     if not competitor:
         print(f"[ERROR] Competitor {competitor_id} not found")
+        db.close()
         return
+        
+    competitor_name = competitor.name
+    maps_url = competitor.maps_url
+    db.close()
 
     driver = init_driver()
     try:
-        posts = extract_posts(driver, competitor_id, project_id, competitor.maps_url, job_id)
+        posts = extract_posts(driver, competitor_id, project_id, maps_url, job_id)
         print(f"[EXTRACTED] {len(posts)} posts found")
 
         added, skipped = save_posts(posts, job_id)
@@ -218,7 +228,7 @@ def scrape_competitor(competitor_id: str, project_id: str, job_id: str | None):
 
         notify_n8n("scrape_done", {
             "competitor_id": competitor_id,
-            "competitor_name": competitor.name,
+            "competitor_name": competitor_name,
             "project_id": project_id,
             "job_id": job_id,
             "new_added": added,
