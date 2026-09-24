@@ -1,0 +1,69 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: mapspy
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - mapspy-net
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - mapspy-net
+
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_HOST=0.0.0.0
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=postgres
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - N8N_WEBHOOK_BASE_URL=http://localhost:5678
+    volumes:
+      - ./n8n-workflows:/home/node/.n8n/workflows
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - postgres
+    networks:
+      - mapspy-net
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GROK_API_KEY: ${GROK_API_KEY}
+      N8N_BASE_URL: ${N8N_BASE_URL}
+      ALERT_EMAIL: ${ALERT_EMAIL}
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+      - ./media:/app/media
+    networks:
+      - mapspy-net
+
+volumes:
+  postgres_data:
+  n8n_data:
+
+networks:
+  mapspy-net:
+    driver: bridge
