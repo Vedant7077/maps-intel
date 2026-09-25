@@ -22,6 +22,7 @@ class Competitor(Base):
     posts_count = Column(Integer, default=0)
     last_scraped_at = Column(DateTime, nullable=True)
     active = Column(Boolean, default=True)
+    is_client = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     project = relationship("Project", back_populates="competitors")
 

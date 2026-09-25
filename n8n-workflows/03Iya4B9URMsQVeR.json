@@ -1,0 +1,259 @@
+{
+  "updatedAt": "2026-09-25T06:50:02.025Z",
+  "createdAt": "2026-09-25T06:50:02.025Z",
+  "id": "03Iya4B9URMsQVeR",
+  "name": "WF-05 Alert System",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alert",
+        "options": {}
+      },
+      "id": "744c5c78-7996-4921-b7cf-9fcfcc86731f",
+      "name": "Webhook: /alert",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -128
+      ],
+      "webhookId": "bf430cd3-40bb-43b1-8493-bd6526ce3713",
+      "notes": "Called by scraper/main.py notify_n8n() for 'captcha' and 'scrape_failed' events."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.alert_type }}",
+                    "rightValue": "captcha",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              }
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.alert_type }}",
+                    "rightValue": "scrape_done",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              }
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.alert_type }}",
+                    "rightValue": "scrape_failed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5f1b1cdb-ff04-4438-97ac-557ba4b37fbf",
+      "name": "Switch: Alert Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        80,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.ALERT_EMAIL }}",
+        "toEmail": "={{ $env.ALERT_EMAIL }}",
+        "subject": "=[MapSpy] CAPTCHA blocking scrape — competitor {{ $json.body.competitor_id }}",
+        "emailFormat": "text",
+        "text": "=A CAPTCHA / verification screen was hit while scraping:\n\nCompetitor ID: {{ $json.body.competitor_id }}\nMaps URL: {{ $json.body.maps_url }}\nJob ID: {{ $json.body.job_id }}\n\nThe scrape has been paused. Resume it once verified manually by calling:\nPOST http://backend:8000/api/jobs/{{ $json.body.job_id }}/resume",
+        "options": {}
+      },
+      "id": "86be5fc2-f30d-4fce-9fd9-63989da52bf1",
+      "name": "Email: CAPTCHA Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        336,
+        -272
+      ],
+      "webhookId": "bae6ecc2-5cbf-4ba2-8360-ee88d50926cb",
+      "credentials": {
+        "smtp": {
+          "id": "nWd5TSoxTEWGiuOb",
+          "name": "Gmail SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.ALERT_EMAIL }}",
+        "toEmail": "={{ $env.ALERT_EMAIL }}",
+        "subject": "=[MapSpy] Scrape completed — {{ $json.body.competitor_name }}",
+        "emailFormat": "text",
+        "text": "=Scrape finished for {{ $json.body.competitor_name }}.\n\nNew posts added: {{ $json.body.new_added }}\nDuplicates skipped: {{ $json.body.duplicates_skipped }}\nImages downloaded: {{ $json.body.images_downloaded }}\nErrors: {{ $json.body.errors_count }}\nJob ID: {{ $json.body.job_id }}",
+        "options": {}
+      },
+      "id": "f32d3721-2424-4eae-a55e-9d0911ebecde",
+      "name": "Email: Scrape Done Summary",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        336,
+        -128
+      ],
+      "webhookId": "e53f99c2-3aea-4ddb-801c-2ac241725648",
+      "credentials": {
+        "smtp": {
+          "id": "nWd5TSoxTEWGiuOb",
+          "name": "Gmail SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.ALERT_EMAIL }}",
+        "toEmail": "={{ $env.ALERT_EMAIL }}",
+        "subject": "=[MapSpy] Scrape FAILED — competitor {{ $json.body.competitor_id }}",
+        "emailFormat": "text",
+        "text": "=A scrape job failed.\n\nCompetitor ID: {{ $json.body.competitor_id }}\nJob ID: {{ $json.body.job_id }}\nError: {{ $json.body.error }}",
+        "options": {}
+      },
+      "id": "fccd0a9c-4158-4b36-acd8-3c90c6b5cf0d",
+      "name": "Email: Scrape Failed Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        336,
+        16
+      ],
+      "webhookId": "b8465c17-2ed5-4af6-8cd2-1e136195e0d3",
+      "credentials": {
+        "smtp": {
+          "id": "nWd5TSoxTEWGiuOb",
+          "name": "Gmail SMTP"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: /alert": {
+      "main": [
+        [
+          {
+            "node": "Switch: Alert Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: Alert Type": {
+      "main": [
+        [
+          {
+            "node": "Email: CAPTCHA Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email: Scrape Done Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email: Scrape Failed Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "b468fa62-e5bd-4507-ac1c-de51da0daa0e",
+  "activeVersionId": "b468fa62-e5bd-4507-ac1c-de51da0daa0e",
+  "versionCounter": 1,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-25T06:50:02.025Z",
+      "createdAt": "2026-09-25T06:50:02.025Z",
+      "role": "workflow:owner",
+      "workflowId": "03Iya4B9URMsQVeR",
+      "projectId": "qfgTopTfpLiiiujo",
+      "project": {
+        "updatedAt": "2026-09-25T06:29:38.871Z",
+        "createdAt": "2026-09-24T18:05:30.477Z",
+        "id": "qfgTopTfpLiiiujo",
+        "name": "Vedant Palekar <vedantp24comp@student.mes.ac.in>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "bce063f6-2914-4d63-8b21-aac95f72b47d"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version b468fa62",
+    "description": ""
+  }
+}

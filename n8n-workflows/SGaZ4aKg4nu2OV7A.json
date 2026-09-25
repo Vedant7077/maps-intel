@@ -1,0 +1,240 @@
+{
+  "updatedAt": "2026-09-25T07:21:08.753Z",
+  "createdAt": "2026-09-25T06:51:20.921Z",
+  "id": "SGaZ4aKg4nu2OV7A",
+  "name": "WF-01 Scrape Orchestrator",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "trigger-scrape",
+        "options": {}
+      },
+      "id": "e42e205b-ec0b-4656-94f4-614fcbc3714a",
+      "name": "Webhook: /trigger-scrape",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "b138e984-0d4c-4c14-a1c2-0bb2f630f191"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "id": "2136f441-9f21-49e4-9560-b383319b4b45",
+      "name": "Nightly Schedule (2 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT c.id AS competitor_id,\n       c.project_id,\n       c.name,\n       c.maps_url\nFROM competitors c\nWHERE c.active = true\n  AND c.project_id = $1;",
+        "options": {
+          "queryReplacement": "={{ $json.body.project_id }}"
+        }
+      },
+      "id": "7e215140-dd49-4a9e-b39e-7830f9f1e696",
+      "name": "Postgres: Get Active Competitors",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        272,
+        80
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "HOXKPRGYkGAfzqmj",
+          "name": "MapsPy Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "002e848f-19ff-430b-bd72-91466f670c32",
+      "name": "Split In Batches (1 at a time)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        512,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/api/scrape/start",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "competitor_id",
+              "value": "={{ $json.competitor_id }}"
+            },
+            {
+              "name": "project_id",
+              "value": "={{ $json.project_id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "ff6b1a22-9463-4f50-a887-ebf482752e2b",
+      "name": "HTTP: Start Scrape (backend)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        768,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "id": "5e0903d2-826c-484d-b18b-33ad0516802b",
+      "name": "Wait (rate-limit friendly)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        992,
+        96
+      ],
+      "webhookId": "764a57bd-74f3-4eda-947b-c87a47c6b501"
+    }
+  ],
+  "connections": {
+    "Webhook: /trigger-scrape": {
+      "main": [
+        [
+          {
+            "node": "Postgres: Get Active Competitors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nightly Schedule (2 AM)": {
+      "main": [
+        [
+          {
+            "node": "Postgres: Get Active Competitors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: Get Active Competitors": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches (1 at a time)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches (1 at a time)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "HTTP: Start Scrape (backend)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Start Scrape (backend)": {
+      "main": [
+        [
+          {
+            "node": "Wait (rate-limit friendly)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait (rate-limit friendly)": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches (1 at a time)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": {
+    "node:Nightly Schedule (2 AM)": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "f4eaba8c-ad91-4919-b717-ab3c3cd7f85f",
+  "activeVersionId": "f4eaba8c-ad91-4919-b717-ab3c3cd7f85f",
+  "versionCounter": 6,
+  "triggerCount": 2,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-25T06:51:20.921Z",
+      "createdAt": "2026-09-25T06:51:20.921Z",
+      "role": "workflow:owner",
+      "workflowId": "SGaZ4aKg4nu2OV7A",
+      "projectId": "qfgTopTfpLiiiujo",
+      "project": {
+        "updatedAt": "2026-09-25T06:29:38.871Z",
+        "createdAt": "2026-09-24T18:05:30.477Z",
+        "id": "qfgTopTfpLiiiujo",
+        "name": "Vedant Palekar <vedantp24comp@student.mes.ac.in>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "bce063f6-2914-4d63-8b21-aac95f72b47d"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version f4eaba8c",
+    "description": ""
+  }
+}

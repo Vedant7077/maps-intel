@@ -40,6 +40,10 @@ services:
       - DB_POSTGRESDB_USER=postgres
       - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
       - N8N_WEBHOOK_BASE_URL=http://localhost:5678
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GROK_API_KEY=${GROK_API_KEY}
+      - ALERT_EMAIL=${ALERT_EMAIL}
     volumes:
       - ./n8n-workflows:/home/node/.n8n/workflows
       - n8n_data:/home/node/.n8n
@@ -65,6 +69,7 @@ services:
         condition: service_healthy
     volumes:
       - ./media:/app/media
+      - ./backend:/app  # live-mount so code changes apply without rebuild
     networks:
       - mapspy-net
 

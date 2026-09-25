@@ -1,0 +1,323 @@
+{
+  "updatedAt": "2026-09-25T06:51:10.843Z",
+  "createdAt": "2026-09-25T06:51:10.843Z",
+  "id": "Igawa7psDoQEA2r0",
+  "name": "WF-04 Content Idea Generator",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-ideas",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "402356fc-0ad7-473e-85c8-69b2a9d39c5a",
+      "name": "Webhook: /generate-ideas",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        80
+      ],
+      "webhookId": "41943dfd-4c1c-4875-a86e-4b19bb6ee544"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT topic, percentage FROM trend_snapshots\nWHERE project_id = '{{ $json.body.project_id }}'\nORDER BY percentage DESC LIMIT 10",
+        "options": {}
+      },
+      "id": "483faa5d-ece9-4e7d-9e47-f1ec9dc7fb4f",
+      "name": "Postgres: Get Top Trends",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "HOXKPRGYkGAfzqmj",
+          "name": "MapsPy Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT topic_title FROM generated_ideas\nWHERE project_id = '{{ $('Webhook: /generate-ideas').item.json.body.project_id }}'\nORDER BY generated_at DESC LIMIT 30",
+        "options": {}
+      },
+      "id": "a6505e77-44a8-4295-a1e5-b956ca47ae48",
+      "name": "Postgres: Get Idea History",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        0,
+        192
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "HOXKPRGYkGAfzqmj",
+          "name": "MapsPy Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "id": "940fcb4c-2579-49e3-8445-506ebaa921ae",
+      "name": "Merge: Trends + History",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        240,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const trendsResult = $('Postgres: Get Top Trends').all().map(i => i.json);\nconst historyResult = $('Postgres: Get Idea History').all().map(i => i.json.topic_title);\nconst count = Number($('Webhook: /generate-ideas').item.json.body.count || 5);\nconst projectId = $('Webhook: /generate-ideas').item.json.body.project_id;\n\nconst trendsList = trendsResult.map(t => `- ${t.topic} (${t.percentage}% of competitor posts)`).join('\\n') || 'No trend data yet — generate general small-business content ideas.';\nconst historyList = historyResult.length ? historyResult.join('; ') : 'none yet';\n\nconst prompt = `You are a local marketing assistant. Based on these competitor content trends:\\n${trendsList}\\n\\nGenerate ${count} NEW Google Maps post ideas for our client business. DO NOT repeat or closely rephrase any of these previously generated titles: ${historyList}.\\n\\nReturn ONLY a valid JSON array (no markdown, no preamble) where each item has exactly this shape:\\n{\"topic_title\": string, \"post_copy\": string (160-300 characters), \"keywords\": string[], \"cta_type\": one of [call, visit, book, buy, learn], \"cta_text\": string, \"image_concept\": string}`;\n\nreturn { json: { prompt, project_id: projectId, count } };"
+      },
+      "id": "4ed0640a-32a2-4508-8f02-5a30f8fb8e9d",
+      "name": "Code: Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: $json.prompt }] }], generationConfig: { temperature: 0.8, responseMimeType: 'application/json' } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "9b6d2efe-0fca-4bb3-baad-b2f8c17313d6",
+      "name": "HTTP: Gemini Generate Ideas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json;\nlet text = raw.candidates[0].content.parts[0].text;\ntext = text.replace(/```json|```/g, '').trim();\nlet ideas;\ntry {\n  ideas = JSON.parse(text);\n  if (!Array.isArray(ideas)) ideas = [ideas];\n} catch (e) {\n  ideas = [];\n}\nreturn ideas.map(idea => ({ json: idea }));"
+      },
+      "id": "1773aefd-9070-4847-a008-efa050aeea61",
+      "name": "Code: Parse Ideas Array",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO generated_ideas (id, project_id, topic_title, post_copy, keywords, cta_type, cta_text, image_concept, ai_provider, generated_at, used)\nVALUES (\n  gen_random_uuid()::text,\n  '{{ $('Webhook: /generate-ideas').item.json.body.project_id }}',\n  '{{ $json.topic_title.replace(/'/g, \"''\") }}',\n  '{{ $json.post_copy.replace(/'/g, \"''\") }}',\n  '{{ JSON.stringify($json.keywords || []) }}'::jsonb,\n  '{{ $json.cta_type }}',\n  '{{ ($json.cta_text || '').replace(/'/g, \"''\") }}',\n  '{{ ($json.image_concept || '').replace(/'/g, \"''\") }}',\n  'gemini',\n  NOW(),\n  false\n)\nRETURNING *",
+        "options": {}
+      },
+      "id": "1b82658d-c54c-4105-b6bf-371a6c802d67",
+      "name": "Postgres: Save Idea",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1200,
+        80
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "HOXKPRGYkGAfzqmj",
+          "name": "MapsPy Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "57ece24e-2453-4ded-8e90-2e0f88a9cacc",
+      "name": "Aggregate: All Saved Ideas",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "4f75db7d-3e31-4fec-a020-6cd7ef27edbd",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.3,
+      "position": [
+        1680,
+        80
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: /generate-ideas": {
+      "main": [
+        [
+          {
+            "node": "Postgres: Get Top Trends",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Postgres: Get Idea History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: Get Top Trends": {
+      "main": [
+        [
+          {
+            "node": "Merge: Trends + History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: Get Idea History": {
+      "main": [
+        [
+          {
+            "node": "Merge: Trends + History",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge: Trends + History": {
+      "main": [
+        [
+          {
+            "node": "Code: Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Gemini Generate Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Gemini Generate Ideas": {
+      "main": [
+        [
+          {
+            "node": "Code: Parse Ideas Array",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Parse Ideas Array": {
+      "main": [
+        [
+          {
+            "node": "Postgres: Save Idea",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: Save Idea": {
+      "main": [
+        [
+          {
+            "node": "Aggregate: All Saved Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate: All Saved Ideas": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "452776ab-52b2-4d92-99ad-24c8af3c07d3",
+  "activeVersionId": "452776ab-52b2-4d92-99ad-24c8af3c07d3",
+  "versionCounter": 1,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-09-25T06:51:10.843Z",
+      "createdAt": "2026-09-25T06:51:10.843Z",
+      "role": "workflow:owner",
+      "workflowId": "Igawa7psDoQEA2r0",
+      "projectId": "qfgTopTfpLiiiujo",
+      "project": {
+        "updatedAt": "2026-09-25T06:29:38.871Z",
+        "createdAt": "2026-09-24T18:05:30.477Z",
+        "id": "qfgTopTfpLiiiujo",
+        "name": "Vedant Palekar <vedantp24comp@student.mes.ac.in>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "bce063f6-2914-4d63-8b21-aac95f72b47d"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": "Version 452776ab",
+    "description": ""
+  }
+}

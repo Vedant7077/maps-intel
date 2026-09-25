@@ -1,0 +1,323 @@
+{
+  "updatedAt": "2026-09-25T08:15:50.351Z",
+  "createdAt": "2026-09-25T06:50:47.701Z",
+  "id": "nBI11ypW34Jw8cMK",
+  "name": "WF-02 AI Post Classifier",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "scrape-complete",
+        "options": {}
+      },
+      "id": "2939b213-7362-414d-8f47-4cb39543a2bc",
+      "name": "Webhook: /scrape-complete",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        80
+      ],
+      "webhookId": "3f2e6d59-dd91-46ce-9ff0-613764826647",
+      "notes": "Called directly by scraper/main.py notify_n8n('scrape_done', ...) after every scrape."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, project_id, competitor_id, post_text\nFROM posts\nWHERE project_id = $1\nAND ai_analysed = false\nLIMIT 50",
+        "options": {
+          "queryReplacement": "={{ $json.body.project_id }}"
+        }
+      },
+      "id": "83a28b0c-0725-4767-a9cd-5fb3dc8f8113",
+      "name": "Postgres: Get Unanalysed Posts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -480,
+        80
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "HOXKPRGYkGAfzqmj",
+          "name": "MapsPy Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "id": "9769d1fb-3893-44dc-bd1d-8cf130a0a2da",
+      "name": "Split In Batches (5)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -240,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: `Classify this Google Maps business update post. Return ONLY valid JSON, no markdown, no preamble, matching exactly this shape: {\"main_topic\": string, \"sub_topic\": string, \"keywords\": string[], \"content_type\": one of [offer, tips, event, announcement, review_highlight], \"cta_type\": one of [call, visit, book, buy, learn, none], \"has_promotion\": boolean, \"promotion_details\": string or null}. Post text: ${$json.post_text}` }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "12a688c2-86b0-4075-9b20-05a17f0eb76b",
+      "name": "HTTP: Gemini Classify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        0
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.candidates !== undefined }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b52b0a64-0852-4030-9878-2bd5df146e4b",
+      "name": "IF: Gemini Succeeded",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GROK_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'x-ai/grok-4.3', messages: [{ role: 'user', content: `Classify this Google Maps update post. Return ONLY valid JSON: {\"main_topic\":string,\"sub_topic\":string,\"keywords\":string[],\"content_type\":string,\"cta_type\":string,\"has_promotion\":boolean,\"promotion_details\":string|null}. Post: ${$('Split In Batches (5)').item.json.post_text}` }], max_tokens: 1000, temperature: 0.1 }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "99afa43d-09eb-4f64-9e28-7c7f78623dba",
+      "name": "HTTP: Grok Fallback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        272,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst batchItems = $('Split In Batches (5)').all();\n\nreturn items.map((item, index) => {\n  const raw = item.json;\n  let text = '';\n  if (raw.candidates && raw.candidates[0]?.content?.parts?.[0]?.text) {\n    text = raw.candidates[0].content.parts[0].text;\n  } else if (raw.choices && raw.choices[0]?.message?.content) {\n    text = raw.choices[0].message.content;\n  } else {\n    text = JSON.stringify(raw);\n  }\n  text = text.replace(/```json|```/g, '').trim();\n  let parsed;\n  try {\n    parsed = JSON.parse(text);\n  } catch (e) {\n    parsed = {\n      main_topic: 'Uncategorized',\n      sub_topic: null,\n      keywords: [],\n      content_type: 'announcement',\n      cta_type: 'none',\n      has_promotion: false,\n      promotion_details: null\n    };\n  }\n\n  const srcIdx = typeof item.pairedItem === 'number'\n    ? item.pairedItem\n    : (item.pairedItem?.item !== undefined ? item.pairedItem.item : index);\n  const sourceItem = batchItems[srcIdx]?.json || batchItems[index]?.json || {};\n\n  return {\n    json: {\n      ...parsed,\n      post_id: sourceItem.id || null,\n      project_id: sourceItem.project_id || null,\n      competitor_id: sourceItem.competitor_id || null\n    }\n  };\n});"
+      },
+      "id": "a973a24b-c142-4267-a70e-7cd53fc460bb",
+      "name": "Code: Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE posts SET\n  main_topic = $1,\n  sub_topic = $2,\n  keywords = $3::json,\n  content_type = $4,\n  cta_type = $5,\n  has_promotion = $6,\n  ai_analysed = true\nWHERE id = $7",
+        "options": {
+          "queryReplacement": "={{ [$json.main_topic, $json.sub_topic, JSON.stringify($json.keywords || []), $json.content_type, $json.cta_type, $json.has_promotion, $json.post_id] }}"
+        }
+      },
+      "id": "3fc9f312-8cb8-41a2-8a20-9f30eb75481b",
+      "name": "Postgres: Save Classification",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        720,
+        80
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "HOXKPRGYkGAfzqmj",
+          "name": "MapsPy Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/aggregate-trends",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"project_id\": \"{{ $('Webhook: /scrape-complete').item.json.body.project_id }}\" }",
+        "options": {}
+      },
+      "id": "53345ac9-f989-4be1-82ab-4196461f84ab",
+      "name": "HTTP: Trigger WF-03 (Trends)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        272
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: /scrape-complete": {
+      "main": [
+        [
+          {
+            "node": "Postgres: Get Unanalysed Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: Get Unanalysed Posts": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches (5)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches (5)": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Trigger WF-03 (Trends)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP: Gemini Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Gemini Classify": {
+      "main": [
+        [
+          {
+            "node": "IF: Gemini Succeeded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Gemini Succeeded": {
+      "main": [
+        [
+          {
+            "node": "Code: Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP: Grok Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Grok Fallback": {
+      "main": [
+        [
+          {
+            "node": "Code: Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Postgres: Save Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres: Save Classification": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches (5)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "c2a3450c-99d7-463d-8f92-5d41f021e86f",
+  "activeVersionId": "c2a3450c-99d7-463d-8f92-5d41f021e86f",
+  "versionCounter": 12,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "tags": []
+}
