@@ -35,6 +35,8 @@ def seed_demo():
         project_id=proj1.id,
         name="Mary Lodge by Subko",
         maps_url="https://www.google.com/maps/search/?api=1&query=Mary+Lodge+by+Subko+Bandra+West+Mumbai",
+        posts_count=5,
+        last_scraped_at=datetime.fromisoformat("2026-09-25T10:33:00"),
         created_at=datetime.fromisoformat("2026-09-25T10:33:00"),
     )
     comp2 = Competitor(
@@ -42,6 +44,8 @@ def seed_demo():
         project_id=proj1.id,
         name="Tuskin Coffee",
         maps_url="https://www.google.com/maps/search/?api=1&query=Tuskin+Coffee+Bandra+West+Mumbai",
+        posts_count=4,
+        last_scraped_at=datetime.fromisoformat("2026-09-25T10:33:00"),
         created_at=datetime.fromisoformat("2026-09-25T10:33:00"),
     )
     comp3 = Competitor(
@@ -49,6 +53,8 @@ def seed_demo():
         project_id=proj1.id,
         name="Starbucks Bandra West",
         maps_url="https://www.google.com/maps/search/?api=1&query=Starbucks+Bandra+West+Mumbai",
+        posts_count=5,
+        last_scraped_at=datetime.fromisoformat("2026-09-25T10:33:00"),
         created_at=datetime.fromisoformat("2026-09-25T10:33:00"),
     )
 
@@ -59,6 +65,8 @@ def seed_demo():
         name="Boojee Cafe",
         maps_url="https://www.google.com/maps/search/?api=1&query=Boojee+Cafe+Bandra+West+Mumbai",
         is_client=True,
+        posts_count=8,
+        last_scraped_at=datetime.fromisoformat("2026-09-25T10:33:00"),
         created_at=datetime.fromisoformat("2026-09-25T10:33:00"),
     )
 
@@ -278,6 +286,35 @@ def seed_demo():
     ]
 
     db.add_all(client_posts)
+    db.commit()
+
+    # ── Trend Snapshots (Aggregated from rival posts, excluding client) ───────
+    from collections import defaultdict
+    topic_competitors = defaultdict(set)
+    topic_counts = defaultdict(int)
+    for p in rival_posts:
+        if p.main_topic:
+            topic_competitors[p.main_topic].add(p.competitor_id)
+            topic_counts[p.main_topic] += 1
+
+    total_rival_posts = len(rival_posts)
+    trend_snapshots = []
+    for topic, count in topic_counts.items():
+        comp_count = len(topic_competitors[topic])
+        pct = round((count / total_rival_posts) * 100, 1)
+        trend_snapshots.append(
+            TrendSnapshot(
+                id=str(uuid.uuid4()),
+                project_id=pid,
+                topic=topic,
+                competitor_count=comp_count,
+                occurrence_count=count,
+                percentage=pct,
+                calculated_at=now,
+            )
+        )
+
+    db.add_all(trend_snapshots)
     db.commit()
 
     print("✓ Demo data seeded successfully!")

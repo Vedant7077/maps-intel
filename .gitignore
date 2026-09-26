@@ -6,4 +6,5 @@ env/
 .venv/
 node_modules/
 .DS_Store
-media/
+media/*
+!media/.gitkeep

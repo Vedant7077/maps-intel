@@ -85,6 +85,7 @@ services:
     volumes:
       - ./media:/app/media
       - ./backend:/app/backend:ro   # read-only mount so scraper imports app.models
+      - ./scraper:/app
     depends_on:
       postgres:
         condition: service_healthy

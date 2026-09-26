@@ -1,6 +1,8 @@
 import sys
 import os
 import hashlib
+import re
+from urllib.parse import urlparse
 import time
 import random
 import httpx
@@ -21,8 +23,31 @@ CHROME_BIN = os.getenv("CHROME_BIN", "/usr/bin/chromium")
 CHROMEDRIVER_PATH = os.getenv("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
 
 
-def create_content_hash(post_url, post_text):
-    combined = f"{post_url}_{post_text[:100]}"
+def normalize_post_url(post_url):
+    """Strip ephemeral tracking params (e.g. Google's g_ep) — keep only
+    scheme+host+path, since query params change on every page load and
+    are not part of the post's actual identity."""
+    if not post_url:
+        return ""
+    parsed = urlparse(post_url)
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+
+
+def normalize_post_text(post_text):
+    """Strip volatile place-card substrings (ratings, review counts,
+    live open/closed hours) that can appear even in otherwise-stable
+    text, before truncating to the hash prefix."""
+    if not post_text:
+        return ""
+    text = re.sub(r'\d+\.\d+\s*\(\s*[\d,]+\s*\)', '', post_text)  # e.g. "4.4(1,395)"
+    text = re.sub(r'(Open|Closed|Opens soon|Closes soon)[^\n]*', '', text, flags=re.IGNORECASE)
+    return text.strip()
+
+
+def create_content_hash(post_url, post_text, project_id):
+    clean_url = normalize_post_url(post_url)
+    clean_text = normalize_post_text(post_text)[:100]
+    combined = f"{project_id}_{clean_url}_{clean_text}"
     return hashlib.sha256(combined.encode()).hexdigest()
 
 
@@ -161,6 +186,7 @@ def extract_posts(driver, competitor_id, project_id, maps_url, job_id):
         print(f"[WARN] Error handling search results: {e}")
 
     # 2. Look for 'See local posts' button or 'Updates' tab
+    see_posts_btn = []
     try:
         see_posts_btn = driver.find_elements(
             By.XPATH,
@@ -173,35 +199,46 @@ def extract_posts(driver, competitor_id, project_id, maps_url, job_id):
     except Exception as e:
         print(f"[WARN] Error clicking Updates button: {e}")
 
-    # 3. Scroll the active panel to lazy-load posts
+    # 3. Locate the scoped Updates / Posts container
+    updates_container = None
+    container_selectors = [
+        "//div[@role='main' and (.//h2[contains(.,'Latest Posts') or contains(.,'Posts') or contains(.,'Updates')] or .//*[contains(text(), 'From the owner')])]",
+        "//div[@role='tabpanel' and (contains(@aria-label, 'Updates') or contains(@aria-label, 'Posts'))]",
+        "//div[contains(@class, 'S3NLN')]",
+        "//div[.//h2[contains(text(), 'Latest Posts')]]",
+    ]
+    for c_sel in container_selectors:
+        found_c = driver.find_elements(By.XPATH, c_sel)
+        if found_c:
+            updates_container = found_c[0]
+            break
+
+    if not updates_container:
+        print("[NAV] Updates panel not found — treating as zero-post business")
+        return []
+
+    # 4. Scroll the active panel to lazy-load posts
     try:
-        panels = driver.find_elements(By.XPATH, '//div[@role="main"] | //div[@role="feed"]')
-        if panels:
-            for _ in range(5):
-                driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", panels[0])
-                time.sleep(random.uniform(1.0, 1.8))
-        else:
-            for _ in range(5):
-                driver.execute_script("window.scrollBy(0, 500)")
-                time.sleep(random.uniform(1.0, 1.8))
+        for _ in range(5):
+            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", updates_container)
+            time.sleep(random.uniform(1.0, 1.8))
     except Exception as e:
         print(f"[WARN] Scroll failed: {e}")
 
     posts = []
     db = SessionLocal()
 
-    # 4. Extract post cards
+    # 5. Extract post cards scoped to updates_container only
     try:
         card_selectors = [
-            "//div[@role='main']//div[contains(@class, 'cKbrCd')]",
-            "//div[@role='main']//*[contains(@jsaction, 'local-post') and not(@role='button')]",
-            "//div[@role='article']",
-            "//div[contains(@aria-label,'Update')]",
-            "//div[contains(@aria-label,'Post')]",
+            ".//div[contains(@class, 'cKbrCd')]",
+            ".//*[contains(@jsaction, 'local-post') and not(@role='button')]",
+            ".//div[contains(@aria-label,'Update')]",
+            ".//div[contains(@aria-label,'Post')]",
         ]
         post_elements = []
         for sel in card_selectors:
-            found = driver.find_elements(By.XPATH, sel)
+            found = updates_container.find_elements(By.XPATH, sel)
             if found:
                 post_elements = found
                 break
@@ -268,7 +305,7 @@ def extract_posts(driver, competitor_id, project_id, maps_url, job_id):
                 except Exception:
                     images = []
 
-                content_hash = create_content_hash(post_url, post_text)
+                content_hash = create_content_hash(post_url, post_text, project_id)
                 posts.append({
                     "competitor_id": competitor_id,
                     "project_id": project_id,
@@ -293,7 +330,11 @@ def save_posts(posts):
     added, skipped = 0, 0
     for post_data in posts:
         content_hash = post_data.get("content_hash")
-        existing = db.query(Post).filter(Post.content_hash == content_hash).first()
+        project_id = post_data.get("project_id")
+        existing = db.query(Post).filter(
+            Post.project_id == project_id,
+            Post.content_hash == content_hash
+        ).first()
         if existing:
             skipped += 1
             continue
