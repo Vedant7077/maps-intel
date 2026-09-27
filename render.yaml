@@ -72,7 +72,7 @@ services:
     runtime: docker
     dockerfilePath: ./scraper/Dockerfile
     dockerContext: ./scraper
-    plan: starter
+    plan: free
     envVars:
       - key: DATABASE_URL
         fromDatabase:
