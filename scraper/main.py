@@ -17,8 +17,17 @@ from selenium.common.exceptions import TimeoutException
 from app.models import Post, Competitor, ScrapeJob
 from app.database import SessionLocal
 
+def _ensure_scheme(url: str) -> str:
+    """Render's fromService hostport property returns 'host:port' with no
+    scheme, unlike local Docker's 'http://service:port' env vars. Make both
+    forms work without needing different code paths per environment."""
+    if url and not url.startswith(("http://", "https://")):
+        return f"http://{url}"
+    return url
+
+
 DATABASE_URL = os.getenv("DATABASE_URL")
-N8N_BASE_URL = os.getenv("N8N_BASE_URL", "http://n8n:5678")
+N8N_BASE_URL = _ensure_scheme(os.getenv("N8N_BASE_URL", "http://n8n:5678"))
 CHROME_BIN = os.getenv("CHROME_BIN", "/usr/bin/chromium")
 CHROMEDRIVER_PATH = os.getenv("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
 

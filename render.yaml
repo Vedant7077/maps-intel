@@ -1,12 +1,89 @@
+databases:
+  - name: mapspy-postgres
+    databaseName: mapspy_prod
+    plan: free
+
 services:
   - type: web
     name: mapspy-backend
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
       - key: DATABASE_URL
+        fromDatabase:
+          name: mapspy-postgres
+          property: connectionString
+      - key: N8N_BASE_URL
+        fromService:
+          name: mapspy-n8n
+          type: web
+          property: hostport
+      - key: SCRAPER_BASE_URL
+        fromService:
+          name: mapspy-scraper
+          type: web
+          property: hostport
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROK_API_KEY
+        sync: false
+
+  - type: web
+    name: mapspy-n8n
+    runtime: image
+    image:
+      url: docker.io/n8nio/n8n:latest
+    envVars:
+      - key: N8N_BASIC_AUTH_ACTIVE
+        value: "false"
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST
+        fromDatabase:
+          name: mapspy-postgres
+          property: host
+      - key: DB_POSTGRESDB_PORT
+        fromDatabase:
+          name: mapspy-postgres
+          property: port
+      - key: DB_POSTGRESDB_USER
+        fromDatabase:
+          name: mapspy-postgres
+          property: user
+      - key: DB_POSTGRESDB_PASSWORD
+        fromDatabase:
+          name: mapspy-postgres
+          property: password
+      - key: DB_POSTGRESDB_DATABASE
+        value: mapspy_n8n
+      - key: N8N_ENCRYPTION_KEY
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROK_API_KEY
+        sync: false
+      - key: ALERT_EMAIL
+        sync: false
+
+  - type: web
+    name: mapspy-scraper
+    runtime: docker
+    dockerfilePath: ./scraper/Dockerfile
+    dockerContext: ./scraper
+    plan: starter
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mapspy-postgres
+          property: connectionString
+      - key: N8N_BASE_URL
+        fromService:
+          name: mapspy-n8n
+          type: web
+          property: hostport
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROK_API_KEY
         sync: false

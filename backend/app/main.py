@@ -9,8 +9,16 @@ import os
 from datetime import datetime
 from typing import Optional
 
-SCRAPER_BASE_URL = os.getenv("SCRAPER_BASE_URL", "http://scraper-worker:8001")
-N8N_BASE_URL = os.getenv("N8N_BASE_URL", "http://n8n:5678")
+def _ensure_scheme(url: str) -> str:
+    """Render's fromService hostport property returns 'host:port' with no
+    scheme, unlike local Docker's 'http://service:port' env vars. Make both
+    forms work without needing different code paths per environment."""
+    if url and not url.startswith(("http://", "https://")):
+        return f"http://{url}"
+    return url
+
+N8N_BASE_URL = _ensure_scheme(os.getenv("N8N_BASE_URL", "http://n8n:5678"))
+SCRAPER_BASE_URL = _ensure_scheme(os.getenv("SCRAPER_BASE_URL", "http://scraper-worker:8001"))
 
 Base.metadata.create_all(bind=engine)
 
