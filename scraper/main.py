@@ -121,6 +121,10 @@ def init_driver():
     options.add_argument('--mute-audio')
     options.add_argument('--window-size=1024,768')
     options.add_argument('--disable-blink-features=AutomationControlled')
+    # Tier 2 aggressive memory flags
+    options.add_argument('--disable-webgl')
+    options.add_argument('--single-process')
+    options.add_argument('--js-flags=--max-old-space-size=256')
     options.add_argument(
         'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
         'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'
@@ -301,8 +305,13 @@ def extract_posts(driver, competitor_id, project_id, maps_url, job_id):
             break
 
     if not updates_container:
-        print("[NAV] Updates panel not found — treating as zero-post business")
-        return []
+        fallback_cards = driver.find_elements(By.XPATH, ".//div[contains(@class, 'cKbrCd')] | .//*[contains(@jsaction, 'local-post') and not(@role='button')] | .//div[contains(@aria-label,'Update')] | .//div[contains(@aria-label,'Post')]")
+        if fallback_cards:
+            print(f"[NAV] Updates panel not matched by container selector, but found {len(fallback_cards)} cards in DOM", flush=True)
+            updates_container = driver
+        else:
+            print("[NAV] Updates panel not found — treating as zero-post business", flush=True)
+            return []
 
     # 4. Explicit wait for post cards to appear inside updates_container
     try:
