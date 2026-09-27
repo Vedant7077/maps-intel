@@ -12,6 +12,8 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 from models import Post, Competitor, ScrapeJob
 from database import SessionLocal
@@ -102,7 +104,22 @@ def init_driver():
     options.add_argument('--disable-gpu')
     options.add_argument('--disable-software-rasterizer')
     options.add_argument('--disable-extensions')
-    options.add_argument('--window-size=1920,1080')
+    options.add_argument('--disable-background-networking')
+    options.add_argument('--disable-background-timer-throttling')
+    options.add_argument('--disable-backgrounding-occluded-windows')
+    options.add_argument('--disable-breakpad')
+    options.add_argument('--disable-client-side-phishing-detection')
+    options.add_argument('--disable-default-apps')
+    options.add_argument('--disable-hang-monitor')
+    options.add_argument('--disable-popup-blocking')
+    options.add_argument('--disable-prompt-on-repost')
+    options.add_argument('--disable-sync')
+    options.add_argument('--disable-translate')
+    options.add_argument('--metrics-recording-only')
+    options.add_argument('--no-first-run')
+    options.add_argument('--safebrowsing-disable-auto-update')
+    options.add_argument('--mute-audio')
+    options.add_argument('--window-size=1024,768')
     options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_argument(
         'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
@@ -287,13 +304,22 @@ def extract_posts(driver, competitor_id, project_id, maps_url, job_id):
         print("[NAV] Updates panel not found — treating as zero-post business")
         return []
 
-    # 4. Scroll the active panel to lazy-load posts
+    # 4. Explicit wait for post cards to appear inside updates_container
+    try:
+        WebDriverWait(driver, 20).until(
+            lambda d: len(updates_container.find_elements(By.XPATH, ".//div[contains(@class, 'cKbrCd')] | .//*[contains(@jsaction, 'local-post') and not(@role='button')] | .//div[contains(@aria-label,'Update')] | .//div[contains(@aria-label,'Post')]")) > 0
+        )
+        print("[NAV] Post cards detected inside updates panel", flush=True)
+    except Exception:
+        print("[WARN] No post cards appeared within 20s wait — proceeding with whatever is currently in the DOM", flush=True)
+
+    # Scroll the active panel to lazy-load posts
     try:
         for _ in range(5):
             driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight", updates_container)
             time.sleep(random.uniform(1.0, 1.8))
     except Exception as e:
-        print(f"[WARN] Scroll failed: {e}")
+        print(f"[WARN] Scroll failed: {e}", flush=True)
 
     posts = []
 
