@@ -110,7 +110,7 @@
         "toEmail": "={{ $env.ALERT_EMAIL }}",
         "subject": "=[MapSpy] CAPTCHA blocking scrape — competitor {{ $json.body.competitor_id }}",
         "emailFormat": "text",
-        "text": "=A CAPTCHA / verification screen was hit while scraping:\n\nCompetitor ID: {{ $json.body.competitor_id }}\nMaps URL: {{ $json.body.maps_url }}\nJob ID: {{ $json.body.job_id }}\n\nThe scrape has been paused. Resume it once verified manually by calling:\nPOST http://backend:8000/api/jobs/{{ $json.body.job_id }}/resume",
+        "text": "=A CAPTCHA / verification screen was hit while scraping:\n\nCompetitor ID: {{ $json.body.competitor_id }}\nMaps URL: {{ $json.body.maps_url }}\nJob ID: {{ $json.body.job_id }}\n\nThe scrape has been paused. Resume it once verified manually by calling:\nPOST https://mapspy-backend.onrender.com/api/jobs/{{ $json.body.job_id }}/resume",
         "options": {}
       },
       "id": "86be5fc2-f30d-4fce-9fd9-63989da52bf1",

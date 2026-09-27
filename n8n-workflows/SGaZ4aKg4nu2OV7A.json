@@ -79,7 +79,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://backend:8000/api/scrape/start",
+        "url": "https://mapspy-backend.onrender.com/api/scrape/start",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [

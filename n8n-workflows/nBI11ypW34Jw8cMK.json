@@ -186,7 +186,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://n8n:5678/webhook/aggregate-trends",
+        "url": "https://mapspy-n8n.onrender.com/webhook/aggregate-trends",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={ \"project_id\": \"{{ $('Webhook: /scrape-complete').item.json.body.project_id }}\" }",

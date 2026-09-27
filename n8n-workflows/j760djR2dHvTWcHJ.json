@@ -121,7 +121,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://backend:8000/api/webhooks/trends-ready",
+        "url": "https://mapspy-backend.onrender.com/api/webhooks/trends-ready",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
