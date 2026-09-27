@@ -36,6 +36,8 @@ services:
     envVars:
       - key: N8N_BASIC_AUTH_ACTIVE
         value: "false"
+      - key: N8N_BLOCK_ENV_ACCESS_IN_NODE
+        value: "false"
       - key: DB_TYPE
         value: postgresdb
       - key: DB_POSTGRESDB_HOST
