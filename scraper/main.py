@@ -11,11 +11,8 @@ import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 
-# backend/ is mounted read-only into this container at /app/backend,
-# and PYTHONPATH (set in Dockerfile) includes it — same import your
-# pyrightconfig.json already resolves for the linter.
-from app.models import Post, Competitor, ScrapeJob
-from app.database import SessionLocal
+from models import Post, Competitor, ScrapeJob
+from database import SessionLocal
 
 def _ensure_scheme(url: str) -> str:
     """Handle scheme-less host:port, and automatically map Render free-tier internal
@@ -364,6 +361,15 @@ def save_posts(posts):
 def scrape_competitor(competitor_id, project_id, job_id=None):
     print(f"\n[SCRAPE] Starting competitor {competitor_id}")
 
+    if job_id:
+        db_start = SessionLocal()
+        job = db_start.query(ScrapeJob).filter(ScrapeJob.id == job_id).first()
+        if job:
+            job.started_at = datetime.utcnow()
+            job.status = "running"
+            db_start.commit()
+        db_start.close()
+
     db = SessionLocal()
     competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
     competitor_name = competitor.name if competitor else None
@@ -374,8 +380,9 @@ def scrape_competitor(competitor_id, project_id, job_id=None):
         print(f"[ERROR] Competitor {competitor_id} not found")
         return
 
-    driver = init_driver()
+    driver = None
     try:
+        driver = init_driver()
         posts = extract_posts(driver, competitor_id, project_id, maps_url, job_id)
         print(f"[EXTRACTED] {len(posts)} posts found")
 
@@ -428,7 +435,11 @@ def scrape_competitor(competitor_id, project_id, job_id=None):
             "error": str(e),
         })
     finally:
-        driver.quit()
+        if driver:
+            try:
+                driver.quit()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

@@ -84,7 +84,6 @@ services:
       N8N_BASE_URL: http://n8n:5678
     volumes:
       - ./media:/app/media
-      - ./backend:/app/backend:ro   # read-only mount so scraper imports app.models
       - ./scraper:/app
     depends_on:
       postgres:

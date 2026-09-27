@@ -19,8 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
-# /app/backend is mounted read-only at runtime so scraper can import app.models
-ENV PYTHONPATH=/app:/app/backend
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
