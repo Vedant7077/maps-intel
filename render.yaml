@@ -6,6 +6,7 @@ databases:
 services:
   - type: web
     name: mapspy-backend
+    plan: free
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
@@ -32,6 +33,7 @@ services:
 
   - type: web
     name: mapspy-n8n
+    plan: free
     runtime: image
     image:
       url: docker.io/n8nio/n8n:latest
