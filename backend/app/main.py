@@ -10,15 +10,20 @@ from datetime import datetime
 from typing import Optional
 
 def _ensure_scheme(url: str) -> str:
-    """Render's fromService hostport property returns 'host:port' with no
-    scheme, unlike local Docker's 'http://service:port' env vars. Make both
-    forms work without needing different code paths per environment."""
-    if url and not url.startswith(("http://", "https://")):
+    """Handle scheme-less host:port, and automatically map Render free-tier internal
+    service names (which lack private DNS) to their public .onrender.com URLs."""
+    if not url:
+        return url
+    if "mapspy-n8n" in url and not url.endswith(".onrender.com"):
+        return "https://mapspy-n8n.onrender.com"
+    if "mapspy-scraper" in url and not url.endswith(".onrender.com"):
+        return "https://mapspy-scraper.onrender.com"
+    if not url.startswith(("http://", "https://")):
         return f"http://{url}"
     return url
 
-N8N_BASE_URL = _ensure_scheme(os.getenv("N8N_BASE_URL", "http://n8n:5678"))
-SCRAPER_BASE_URL = _ensure_scheme(os.getenv("SCRAPER_BASE_URL", "http://scraper-worker:8001"))
+N8N_BASE_URL = _ensure_scheme(os.getenv("N8N_BASE_URL", "https://mapspy-n8n.onrender.com"))
+SCRAPER_BASE_URL = _ensure_scheme(os.getenv("SCRAPER_BASE_URL", "https://mapspy-scraper.onrender.com"))
 
 Base.metadata.create_all(bind=engine)
 

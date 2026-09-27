@@ -18,16 +18,19 @@ from app.models import Post, Competitor, ScrapeJob
 from app.database import SessionLocal
 
 def _ensure_scheme(url: str) -> str:
-    """Render's fromService hostport property returns 'host:port' with no
-    scheme, unlike local Docker's 'http://service:port' env vars. Make both
-    forms work without needing different code paths per environment."""
-    if url and not url.startswith(("http://", "https://")):
+    """Handle scheme-less host:port, and automatically map Render free-tier internal
+    service names (which lack private DNS) to their public .onrender.com URLs."""
+    if not url:
+        return url
+    if "mapspy-n8n" in url and not url.endswith(".onrender.com"):
+        return "https://mapspy-n8n.onrender.com"
+    if not url.startswith(("http://", "https://")):
         return f"http://{url}"
     return url
 
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-N8N_BASE_URL = _ensure_scheme(os.getenv("N8N_BASE_URL", "http://n8n:5678"))
+N8N_BASE_URL = _ensure_scheme(os.getenv("N8N_BASE_URL", "https://mapspy-n8n.onrender.com"))
 CHROME_BIN = os.getenv("CHROME_BIN", "/usr/bin/chromium")
 CHROMEDRIVER_PATH = os.getenv("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
 
