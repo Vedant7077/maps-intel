@@ -148,6 +148,12 @@ def get_job(job_id: str, db: Session = Depends(get_db)):
     job = db.query(ScrapeJob).filter(ScrapeJob.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404)
+    if job.status == "running" and job.created_at:
+        elapsed = (datetime.utcnow() - job.created_at).total_seconds()
+        if elapsed > 180:
+            job.status = "failed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
     return job
 
 @app.post("/api/jobs/{job_id}/resume")

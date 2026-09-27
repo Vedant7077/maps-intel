@@ -7,9 +7,11 @@ import time
 import random
 import httpx
 from datetime import datetime, timedelta
-import undetected_chromedriver as uc
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, WebDriverException
 
 from models import Post, Competitor, ScrapeJob
 from database import SessionLocal
@@ -61,19 +63,40 @@ def create_content_hash(post_url, post_text, project_id):
 
 
 def init_driver():
-    """Use the Chromium already baked into the image — no runtime download,
-    no version-mismatch surprises between host and container."""
-    options = uc.ChromeOptions()
-    options.binary_location = CHROME_BIN
+    """Use standard Selenium with Debian-packaged Chromium & chromedriver and CDP stealth."""
+    options = Options()
+    if CHROME_BIN and os.path.exists(CHROME_BIN):
+        options.binary_location = CHROME_BIN
     options.add_argument('--headless=new')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
+    options.add_argument('--disable-extensions')
+    options.add_argument('--disable-software-rasterizer')
+    options.add_argument('--window-size=1920,1080')
+    options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_argument(
         'user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
         'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36'
     )
-    driver = uc.Chrome(options=options, version_main=None, driver_executable_path=CHROMEDRIVER_PATH)
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+
+    if CHROMEDRIVER_PATH and os.path.exists(CHROMEDRIVER_PATH):
+        service = Service(executable_path=CHROMEDRIVER_PATH)
+        driver = webdriver.Chrome(service=service, options=options)
+    else:
+        driver = webdriver.Chrome(options=options)
+
+    driver.set_page_load_timeout(35)
+    try:
+        driver.execute_cdp_cmd(
+            "Page.addScriptToEvaluateOnNewDocument",
+            {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"}
+        )
+    except Exception as e:
+        print(f"[WARN] Failed to set cdp stealth: {e}", flush=True)
+
     return driver
 
 
@@ -235,7 +258,6 @@ def extract_posts(driver, competitor_id, project_id, maps_url, job_id):
         print(f"[WARN] Scroll failed: {e}")
 
     posts = []
-    db = SessionLocal()
 
     # 5. Extract post cards scoped to updates_container only
     try:
@@ -377,7 +399,15 @@ def scrape_competitor(competitor_id, project_id, job_id=None):
     db.close()
 
     if not competitor_name:
-        print(f"[ERROR] Competitor {competitor_id} not found")
+        print(f"[ERROR] Competitor {competitor_id} not found", flush=True)
+        if job_id:
+            db_err = SessionLocal()
+            job = db_err.query(ScrapeJob).filter(ScrapeJob.id == job_id).first()
+            if job:
+                job.status = "failed"
+                job.completed_at = datetime.utcnow()
+                db_err.commit()
+            db_err.close()
         return
 
     driver = None

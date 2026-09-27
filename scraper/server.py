@@ -3,6 +3,7 @@ scraper/server.py
 Minimal FastAPI HTTP gateway that accepts scrape requests from n8n / backend
 and launches scraper/main.py as a background subprocess.
 """
+import os
 import subprocess
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -25,7 +26,7 @@ def health():
 @app.post("/api/scrape")
 def start_scrape(req: ScrapeRequest):
     cmd = [
-        "python", "main.py",
+        "python", "-u", "main.py",
         "--competitor_id", req.competitor_id,
         "--project_id", req.project_id,
     ]
@@ -33,11 +34,20 @@ def start_scrape(req: ScrapeRequest):
         cmd += ["--job_id", req.job_id]
 
     try:
-        subprocess.Popen(cmd, cwd="/app")
+        log_file = open("/tmp/scraper.log", "a")
+        subprocess.Popen(cmd, cwd="/app", stdout=log_file, stderr=subprocess.STDOUT)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
     return {"status": "scraping_started", "competitor_id": req.competitor_id}
+
+
+@app.get("/api/logs")
+def get_logs():
+    if os.path.exists("/tmp/scraper.log"):
+        with open("/tmp/scraper.log", "r", encoding="utf-8", errors="replace") as f:
+            return {"logs": f.read()[-8000:]}
+    return {"logs": "No logs yet"}
 
 
 if __name__ == "__main__":
