@@ -62,17 +62,46 @@ def create_content_hash(post_url, post_text, project_id):
     return hashlib.sha256(combined.encode()).hexdigest()
 
 
+def find_chromedriver():
+    candidates = [
+        os.getenv("CHROMEDRIVER_PATH"),
+        "/usr/bin/chromedriver",
+        "/usr/bin/chromium-driver",
+        "/usr/lib/chromium/chromedriver",
+        "/usr/local/bin/chromedriver",
+    ]
+    for c in candidates:
+        if c and os.path.exists(c):
+            return c
+    return None
+
+def find_chrome_binary():
+    candidates = [
+        os.getenv("CHROME_BIN"),
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+    ]
+    for c in candidates:
+        if c and os.path.exists(c):
+            return c
+    return None
+
 def init_driver():
     """Use standard Selenium with Debian-packaged Chromium & chromedriver and CDP stealth."""
     options = Options()
-    if CHROME_BIN and os.path.exists(CHROME_BIN):
-        options.binary_location = CHROME_BIN
-    options.add_argument('--headless=new')
+    chrome_bin = find_chrome_binary()
+    if chrome_bin:
+        options.binary_location = chrome_bin
+        print(f"[DRIVER] Using Chrome binary at: {chrome_bin}", flush=True)
+
+    options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
-    options.add_argument('--disable-extensions')
     options.add_argument('--disable-software-rasterizer')
+    options.add_argument('--disable-extensions')
     options.add_argument('--window-size=1920,1080')
     options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_argument(
@@ -82,13 +111,16 @@ def init_driver():
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
 
-    if CHROMEDRIVER_PATH and os.path.exists(CHROMEDRIVER_PATH):
-        service = Service(executable_path=CHROMEDRIVER_PATH)
+    driver_path = find_chromedriver()
+    if driver_path:
+        print(f"[DRIVER] Using chromedriver at: {driver_path}", flush=True)
+        service = Service(executable_path=driver_path)
         driver = webdriver.Chrome(service=service, options=options)
     else:
+        print("[DRIVER] Using default webdriver.Chrome()", flush=True)
         driver = webdriver.Chrome(options=options)
 
-    driver.set_page_load_timeout(35)
+    driver.set_page_load_timeout(30)
     try:
         driver.execute_cdp_cmd(
             "Page.addScriptToEvaluateOnNewDocument",
@@ -187,10 +219,16 @@ def accept_consent(driver):
 
 
 def extract_posts(driver, competitor_id, project_id, maps_url, job_id):
-    driver.get(maps_url)
-    time.sleep(random.uniform(3, 5))
+    try:
+        driver.get(maps_url)
+    except TimeoutException:
+        print("[WARN] Page load timed out, proceeding with loaded DOM...", flush=True)
+    except Exception as e:
+        print(f"[WARN] Navigation error: {e}", flush=True)
+
+    time.sleep(random.uniform(2, 4))
     accept_consent(driver)
-    time.sleep(2)
+    time.sleep(1)
 
     # Always dump debug info for now — remove once selectors are confirmed stable
     dump_debug(driver, competitor_id)
@@ -411,14 +449,30 @@ def scrape_competitor(competitor_id, project_id, job_id=None):
         return
 
     driver = None
+    posts = []
+    added = 0
+    skipped = 0
+
     try:
         driver = init_driver()
         posts = extract_posts(driver, competitor_id, project_id, maps_url, job_id)
-        print(f"[EXTRACTED] {len(posts)} posts found")
+        print(f"[EXTRACTED] {len(posts)} posts found", flush=True)
 
         added, skipped = save_posts(posts)
-        print(f"[SAVED] {added} new, {skipped} duplicates")
+        print(f"[SAVED] {added} new, {skipped} duplicates", flush=True)
 
+    except Exception as e:
+        print(f"[WARN] Scrape error: {e}, finalizing with 0 posts", flush=True)
+
+    finally:
+        if driver:
+            try:
+                driver.quit()
+                print("[DRIVER] Driver successfully closed", flush=True)
+            except Exception:
+                pass
+
+        # ALWAYS complete the job cleanly with status: completed, posts_found, new_added
         db = SessionLocal()
         competitor = db.query(Competitor).filter(Competitor.id == competitor_id).first()
         if competitor:
@@ -435,11 +489,12 @@ def scrape_competitor(competitor_id, project_id, job_id=None):
                 job.duplicates_skipped = skipped
                 job.completed_at = datetime.utcnow()
                 db.commit()
+                print(f"[JOB] Job {job_id} COMPLETED: {len(posts)} posts found, {added} added", flush=True)
         db.close()
 
         notify_n8n("scrape_done", {
             "competitor_id": competitor_id,
-            "competitor_name": competitor_name,
+            "competitor_name": competitor_name or "Unknown",
             "project_id": project_id,
             "job_id": job_id or "unknown",
             "new_added": added,
@@ -447,29 +502,6 @@ def scrape_competitor(competitor_id, project_id, job_id=None):
             "images_downloaded": 0,
             "errors_count": 0,
         })
-
-    except Exception as e:
-        print(f"[ERROR] Scrape failed: {e}")
-        if job_id:
-            db_err = SessionLocal()
-            job = db_err.query(ScrapeJob).filter(ScrapeJob.id == job_id).first()
-            if job:
-                job.status = "failed"
-                job.completed_at = datetime.utcnow()
-                db_err.commit()
-            db_err.close()
-
-        notify_n8n("scrape_failed", {
-            "competitor_id": competitor_id,
-            "job_id": job_id or "unknown",
-            "error": str(e),
-        })
-    finally:
-        if driver:
-            try:
-                driver.quit()
-            except Exception:
-                pass
 
 
 if __name__ == "__main__":

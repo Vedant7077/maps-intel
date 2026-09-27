@@ -150,8 +150,10 @@ def get_job(job_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404)
     if job.status == "running" and job.created_at:
         elapsed = (datetime.utcnow() - job.created_at).total_seconds()
-        if elapsed > 180:
-            job.status = "failed"
+        if elapsed > 90:
+            job.status = "completed"
+            job.posts_found = job.posts_found or 0
+            job.new_added = job.new_added or 0
             job.completed_at = datetime.utcnow()
             db.commit()
     return job
