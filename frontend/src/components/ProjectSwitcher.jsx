@@ -14,10 +14,12 @@ export default function ProjectSwitcher() {
     queryFn: fetchProjects,
   });
 
-  // Auto-select first project if none selected
+  // Auto-sync active project with backend list
   useEffect(() => {
-    if (!project && projects.length > 0) {
-      setProject(projects[0]);
+    if (projects.length > 0) {
+      if (!project || !projects.some((p) => p.id === project.id)) {
+        setProject(projects[0]);
+      }
     }
   }, [projects, project, setProject]);
 

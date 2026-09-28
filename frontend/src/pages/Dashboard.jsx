@@ -60,7 +60,10 @@ export default function Dashboard() {
 function LoadingSkeleton() {
   return (
     <div className="flex flex-col gap-6 animate-pulse">
-      <div className="h-8 w-40 bg-[#141416] rounded-lg" />
+      <div className="flex items-center gap-2 text-sm text-[#A1A1AA]">
+        <div className="w-2 h-2 rounded-full bg-[#6366F1] animate-ping" />
+        <span>Loading intelligence overview...</span>
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-[#141416] rounded-xl border border-[#27272A]" />)}
       </div>
