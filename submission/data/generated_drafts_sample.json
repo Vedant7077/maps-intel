@@ -1,0 +1,101 @@
+{
+    "total": 5,
+    "page": 0,
+    "results": [
+        {
+            "post_copy": "Unwind after a busy workday with our all-new weekday Happy Hour! Enjoy handcrafted cocktails and signature artisan appetizers at special discounted prices from 4 PM to 6 PM. Gather your coworkers or friends and kick off your evening right. Stop by today!",
+            "project_id": "7c4f2d91-3a61-4e8b-9d25-6f7a1c3b82e4",
+            "id": "1d797734-f93e-450a-9011-554fcc8bddce",
+            "topic_title": "Sunset Sips & Small Bites Happy Hour",
+            "keywords": [
+                "happy hour",
+                "cocktails",
+                "appetizers",
+                "local bar",
+                "drink specials"
+            ],
+            "image_concept": "A warm, ambient close-up shot of two craft cocktails garnished with fresh citrus alongside a rustic wooden board of shareable tapas on a patio table.",
+            "generated_at": "2026-09-27T07:24:45.796025",
+            "cta_type": "visit",
+            "cta_text": "Visit Us",
+            "ai_provider": "gemini",
+            "used": false
+        },
+        {
+            "post_copy": "Love dining with us? Join our free VIP Rewards Club and start earning points toward complimentary entrees and exclusive seasonal treats with every visit. Sign up today and instantly unlock a free dessert on your next weekend dinner with us!",
+            "project_id": "7c4f2d91-3a61-4e8b-9d25-6f7a1c3b82e4",
+            "id": "4952fe7f-3a7a-45a4-a968-0d54d11dc8b4",
+            "topic_title": "VIP Rewards: Taste The Perks",
+            "keywords": [
+                "rewards program",
+                "loyalty perks",
+                "free dessert",
+                "local dining",
+                "restaurant rewards"
+            ],
+            "image_concept": "A stylish flat-lay photo of an artisan dessert plate with a smartphone showing the digital loyalty rewards card interface beside it.",
+            "generated_at": "2026-09-27T07:24:45.796025",
+            "cta_type": "learn",
+            "cta_text": "Learn More",
+            "ai_provider": "gemini",
+            "used": false
+        },
+        {
+            "post_copy": "Coffee meets craft! We're teaming up with local artisans for a Sunday morning ceramics and slow-brew session. Sip single-origin pour-overs while creating your own custom ceramic espresso cup. Limited spots available — reserve yours in-store or online.",
+            "project_id": "7c4f2d91-3a61-4e8b-9d25-6f7a1c3b82e4",
+            "id": "8a31e21b-4f92-4917-a021-9d8e7c1122aa",
+            "topic_title": "Local Artisan Collab: Brew & Clay Sunday",
+            "keywords": [
+                "collaboration",
+                "local artist",
+                "workshop",
+                "ceramics",
+                "specialty coffee"
+            ],
+            "image_concept": "Bright, sunlit workshop table with ceramic coffee mugs in progress, pottery tools, and warm pour-over carafes.",
+            "generated_at": "2026-09-28T10:15:22.105432",
+            "cta_type": "book",
+            "cta_text": "Book Now",
+            "ai_provider": "gemini",
+            "used": false
+        },
+        {
+            "post_copy": "Beat the 3 PM afternoon slump at Boojee! Enjoy 2-for-1 iced lattes and cold brews every Tuesday through Thursday between 3 PM and 5 PM. Pair your brew with a fresh house-baked cookie for just ₹150.",
+            "project_id": "7c4f2d91-3a61-4e8b-9d25-6f7a1c3b82e4",
+            "id": "c59b1284-8843-4ce1-866e-52f019b7a33d",
+            "topic_title": "Afternoon Refresh: 2-for-1 Cold Brews",
+            "keywords": [
+                "happy hour",
+                "afternoon deal",
+                "bogo",
+                "cold brew",
+                "bandra cafe"
+            ],
+            "image_concept": "Two condensation-beaded iced lattes with wooden straws on a sleek cafe counter, soft blurred background.",
+            "generated_at": "2026-09-28T10:15:22.105432",
+            "cta_type": "visit",
+            "cta_text": "Visit Us",
+            "ai_provider": "gemini",
+            "used": false
+        },
+        {
+            "post_copy": "Explore coffee beyond the cup: Our new Weekend Tasting Flight showcases 3 rare single-origin roasts paired with artisan chocolate and pastries. Discover flavor profiles from floral Ethiopian to nutty Colombian. Available Saturdays and Sundays till 2 PM.",
+            "project_id": "7c4f2d91-3a61-4e8b-9d25-6f7a1c3b82e4",
+            "id": "7e43d901-7c22-4214-bf91-a1d2e3f4b5c6",
+            "topic_title": "Weekend Specialty Coffee Tasting Flight",
+            "keywords": [
+                "tasting flight",
+                "single origin",
+                "weekend special",
+                "coffee experience",
+                "artisan chocolate"
+            ],
+            "image_concept": "A curated wooden tray with three small glass coffee carafes, ceramic tasting cups, and dark chocolate squares.",
+            "generated_at": "2026-09-28T10:15:22.105432",
+            "cta_type": "visit",
+            "cta_text": "Experience Now",
+            "ai_provider": "gemini",
+            "used": false
+        }
+    ]
+}

@@ -1,0 +1,112 @@
+{
+  "name": "WF-01 Scrape Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "trigger-scrape",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "wh-trigger",
+      "name": "Webhook: /trigger-scrape",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "cronExpression": "0 2 * * *"
+      },
+      "id": "cron-nightly",
+      "name": "Nightly Schedule (2 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 460]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT c.id AS competitor_id, c.project_id, c.name, c.maps_url\nFROM competitors c\nWHERE c.active = true\nAND ({{ $json.body.project_id ? 'c.project_id = ''' + $json.body.project_id + '''' : '1=1' }})",
+        "options": {}
+      },
+      "id": "pg-get-competitors",
+      "name": "Postgres: Get Active Competitors",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [460, 380],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "MapsPy Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-competitors",
+      "name": "Split In Batches (1 at a time)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [700, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/api/scrape/start",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "competitor_id", "value": "={{ $json.competitor_id }}" },
+            { "name": "project_id", "value": "={{ $json.project_id }}" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "id": "http-start-scrape",
+      "name": "HTTP: Start Scrape (backend)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [940, 380]
+    },
+    {
+      "parameters": {
+        "amount": 20,
+        "unit": "seconds"
+      },
+      "id": "wait-between",
+      "name": "Wait (rate-limit friendly)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1180, 380]
+    }
+  ],
+  "connections": {
+    "Webhook: /trigger-scrape": {
+      "main": [[{ "node": "Postgres: Get Active Competitors", "type": "main", "index": 0 }]]
+    },
+    "Nightly Schedule (2 AM)": {
+      "main": [[{ "node": "Postgres: Get Active Competitors", "type": "main", "index": 0 }]]
+    },
+    "Postgres: Get Active Competitors": {
+      "main": [[{ "node": "Split In Batches (1 at a time)", "type": "main", "index": 0 }]]
+    },
+    "Split In Batches (1 at a time)": {
+      "main": [
+        [{ "node": "HTTP: Start Scrape (backend)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "HTTP: Start Scrape (backend)": {
+      "main": [[{ "node": "Wait (rate-limit friendly)", "type": "main", "index": 0 }]]
+    },
+    "Wait (rate-limit friendly)": {
+      "main": [[{ "node": "Split In Batches (1 at a time)", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

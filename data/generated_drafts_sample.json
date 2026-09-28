@@ -1,0 +1,44 @@
+{
+    "total": 2,
+    "page": 0,
+    "results": [
+        {
+            "post_copy": "Unwind after a busy workday with our all-new weekday Happy Hour! Enjoy handcrafted cocktails and signature artisan appetizers at special discounted prices from 4 PM to 6 PM. Gather your coworkers or friends and kick off your evening right. Stop by today!",
+            "project_id": "7c4f2d91-3a61-4e8b-9d25-6f7a1c3b82e4",
+            "id": "1d797734-f93e-450a-9011-554fcc8bddce",
+            "topic_title": "Sunset Sips & Small Bites Happy Hour",
+            "keywords": [
+                "happy hour",
+                "cocktails",
+                "appetizers",
+                "local bar",
+                "drink specials"
+            ],
+            "image_concept": "A warm, ambient close-up shot of two craft cocktails garnished with fresh citrus alongside a rustic wooden board of shareable tapas on a patio table.",
+            "generated_at": "2026-09-27T07:24:45.796025",
+            "cta_type": "visit",
+            "cta_text": "Visit Us",
+            "ai_provider": "gemini",
+            "used": false
+        },
+        {
+            "post_copy": "Love dining with us? Join our free VIP Rewards Club and start earning points toward complimentary entrees and exclusive seasonal treats with every visit. Sign up today and instantly unlock a free dessert on your next weekend dinner with us!",
+            "project_id": "7c4f2d91-3a61-4e8b-9d25-6f7a1c3b82e4",
+            "id": "4952fe7f-3a7a-45a4-a968-0d54d11dc8b4",
+            "topic_title": "VIP Rewards: Taste The Perks",
+            "keywords": [
+                "rewards program",
+                "loyalty perks",
+                "free dessert",
+                "local dining",
+                "restaurant rewards"
+            ],
+            "image_concept": "A stylish flat-lay photo of an artisan dessert plate with a smartphone showing the digital loyalty rewards card interface beside it.",
+            "generated_at": "2026-09-27T07:24:45.796025",
+            "cta_type": "learn",
+            "cta_text": "Learn More",
+            "ai_provider": "gemini",
+            "used": false
+        }
+    ]
+}

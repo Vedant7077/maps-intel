@@ -1,0 +1,117 @@
+{
+  "name": "WF-05 Alert System",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "alert",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "wh-alert",
+      "name": "Webhook: /alert",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "notes": "Called by scraper/main.py notify_n8n() for 'captcha' and 'scrape_failed' events."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "conditions": [{ "leftValue": "={{ $json.body.alert_type }}", "rightValue": "captcha", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "outputKey": "captcha"
+            },
+            {
+              "conditions": {
+                "conditions": [{ "leftValue": "={{ $json.body.alert_type }}", "rightValue": "scrape_done", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "outputKey": "scrape_done"
+            },
+            {
+              "conditions": {
+                "conditions": [{ "leftValue": "={{ $json.body.alert_type }}", "rightValue": "scrape_failed", "operator": { "type": "string", "operation": "equals" } }],
+                "combinator": "and"
+              },
+              "outputKey": "scrape_failed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "switch-alert-type",
+      "name": "Switch: Alert Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.ALERT_EMAIL }}",
+        "toEmail": "={{ $env.ALERT_EMAIL }}",
+        "subject": "=[MapSpy] CAPTCHA blocking scrape — competitor {{ $json.body.competitor_id }}",
+        "emailFormat": "text",
+        "text": "=A CAPTCHA / verification screen was hit while scraping:\n\nCompetitor ID: {{ $json.body.competitor_id }}\nMaps URL: {{ $json.body.maps_url }}\nJob ID: {{ $json.body.job_id }}\n\nThe scrape has been paused. Resume it once verified manually by calling:\nPOST http://backend:8000/api/jobs/{{ $json.body.job_id }}/resume",
+        "options": {}
+      },
+      "id": "email-captcha",
+      "name": "Email: CAPTCHA Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [700, 160],
+      "credentials": { "smtp": { "id": "REPLACE_WITH_YOUR_SMTP_CREDENTIAL_ID", "name": "Gmail SMTP" } }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.ALERT_EMAIL }}",
+        "toEmail": "={{ $env.ALERT_EMAIL }}",
+        "subject": "=[MapSpy] Scrape completed — {{ $json.body.competitor_name }}",
+        "emailFormat": "text",
+        "text": "=Scrape finished for {{ $json.body.competitor_name }}.\n\nNew posts added: {{ $json.body.new_added }}\nDuplicates skipped: {{ $json.body.duplicates_skipped }}\nImages downloaded: {{ $json.body.images_downloaded }}\nErrors: {{ $json.body.errors_count }}\nJob ID: {{ $json.body.job_id }}",
+        "options": {}
+      },
+      "id": "email-scrape-done",
+      "name": "Email: Scrape Done Summary",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [700, 300],
+      "credentials": { "smtp": { "id": "REPLACE_WITH_YOUR_SMTP_CREDENTIAL_ID", "name": "Gmail SMTP" } }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.ALERT_EMAIL }}",
+        "toEmail": "={{ $env.ALERT_EMAIL }}",
+        "subject": "=[MapSpy] Scrape FAILED — competitor {{ $json.body.competitor_id }}",
+        "emailFormat": "text",
+        "text": "=A scrape job failed.\n\nCompetitor ID: {{ $json.body.competitor_id }}\nJob ID: {{ $json.body.job_id }}\nError: {{ $json.body.error }}",
+        "options": {}
+      },
+      "id": "email-scrape-failed",
+      "name": "Email: Scrape Failed Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [700, 440],
+      "credentials": { "smtp": { "id": "REPLACE_WITH_YOUR_SMTP_CREDENTIAL_ID", "name": "Gmail SMTP" } }
+    }
+  ],
+  "connections": {
+    "Webhook: /alert": {
+      "main": [[{ "node": "Switch: Alert Type", "type": "main", "index": 0 }]]
+    },
+    "Switch: Alert Type": {
+      "main": [
+        [{ "node": "Email: CAPTCHA Alert", "type": "main", "index": 0 }],
+        [{ "node": "Email: Scrape Done Summary", "type": "main", "index": 0 }],
+        [{ "node": "Email: Scrape Failed Alert", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "notes": "No alerts table exists in the current schema (models.py), so this workflow only emails — it does not log to Postgres. If you want a history of alerts visible in the UI later, add an `alerts` table via Alembic and insert a row alongside each email node."
+}

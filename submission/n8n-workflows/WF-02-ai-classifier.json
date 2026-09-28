@@ -1,0 +1,174 @@
+{
+  "name": "WF-02 AI Post Classifier",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "scrape-complete",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "wh-scrape-complete",
+      "name": "Webhook: /scrape-complete",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "notes": "Called directly by scraper/main.py notify_n8n('scrape_done', ...) after every scrape."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, project_id, competitor_id, post_text\nFROM posts\nWHERE project_id = '{{ $json.body.project_id }}'\nAND ai_analysed = false\nLIMIT 50",
+        "options": {}
+      },
+      "id": "pg-get-unanalysed",
+      "name": "Postgres: Get Unanalysed Posts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [440, 300],
+      "credentials": {
+        "postgres": { "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID", "name": "MapsPy Postgres" }
+      }
+    },
+    {
+      "parameters": { "batchSize": 5, "options": {} },
+      "id": "split-posts",
+      "name": "Split In Batches (5)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Classify this Google Maps business update post. Return ONLY valid JSON, no markdown, no preamble, matching exactly this shape: {\\\"main_topic\\\": string, \\\"sub_topic\\\": string, \\\"keywords\\\": string[], \\\"content_type\\\": one of [offer, tips, event, announcement, review_highlight], \\\"cta_type\\\": one of [call, visit, book, buy, learn, none], \\\"has_promotion\\\": boolean, \\\"promotion_details\\\": string or null}. Post text: \\\"{{ $json.post_text.replace(/\\\"/g, \\\"'\\\") }}\\\"\"\n    }]\n  }],\n  \"generationConfig\": { \"temperature\": 0.1, \"responseMimeType\": \"application/json\" }\n}",
+        "options": { "timeout": 15000, "retry": { "maxTries": 3, "waitBetweenTries": 5000 } }
+      },
+      "id": "http-gemini",
+      "name": "HTTP: Gemini Classify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 220],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.error !== undefined }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "notEqual" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-gemini-ok",
+      "name": "IF: Gemini Succeeded",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1160, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.x.ai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.GROK_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"grok-beta\",\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Classify this Google Maps update post. Return ONLY valid JSON: {\\\"main_topic\\\":string,\\\"sub_topic\\\":string,\\\"keywords\\\":string[],\\\"content_type\\\":string,\\\"cta_type\\\":string,\\\"has_promotion\\\":boolean,\\\"promotion_details\\\":string|null}. Post: \\\"{{ $('Split In Batches (5)').item.json.post_text.replace(/\\\"/g, \\\"'\\\") }}\\\"\"\n  }],\n  \"temperature\": 0.1\n}",
+        "options": { "timeout": 15000, "retry": { "maxTries": 3, "waitBetweenTries": 5000 } }
+      },
+      "id": "http-grok-fallback",
+      "name": "HTTP: Grok Fallback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalizes either Gemini or Grok response shape into one flat object\nconst raw = $input.item.json;\nlet text;\nif (raw.candidates) {\n  text = raw.candidates[0].content.parts[0].text;\n} else if (raw.choices) {\n  text = raw.choices[0].message.content;\n} else {\n  text = JSON.stringify(raw);\n}\ntext = text.replace(/```json|```/g, '').trim();\nlet parsed;\ntry {\n  parsed = JSON.parse(text);\n} catch (e) {\n  parsed = { main_topic: 'Uncategorized', sub_topic: null, keywords: [], content_type: 'announcement', cta_type: 'none', has_promotion: false, promotion_details: null };\n}\n\n// Normalize topic casing so 'business profile' and 'Business Profile'\n// collapse into one trend bucket instead of splitting WF-03's GROUP BY.\nfunction titleCase(str) {\n  if (!str || typeof str !== 'string') return str;\n  return str.trim().toLowerCase().replace(/\\b\\w/g, c => c.toUpperCase());\n}\nparsed.main_topic = titleCase(parsed.main_topic);\nparsed.sub_topic = titleCase(parsed.sub_topic);\n\nreturn { json: parsed };"
+      },
+      "id": "code-parse-classification",
+      "name": "Code: Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1400, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE posts SET\n  main_topic = '{{ $json.main_topic }}',\n  sub_topic = {{ $json.sub_topic ? \"'\" + $json.sub_topic + \"'\" : 'NULL' }},\n  keywords = '{{ JSON.stringify($json.keywords || []) }}'::jsonb,\n  content_type = '{{ $json.content_type }}',\n  cta_type = '{{ $json.cta_type }}',\n  has_promotion = {{ $json.has_promotion ? 'true' : 'false' }},\n  ai_analysed = true\nWHERE id = '{{ $('Split In Batches (5)').item.json.id }}'",
+        "options": {}
+      },
+      "id": "pg-update-post",
+      "name": "Postgres: Save Classification",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1640, 300],
+      "credentials": {
+        "postgres": { "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID", "name": "MapsPy Postgres" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/aggregate-trends",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"project_id\": \"{{ $('Webhook: /scrape-complete').item.json.body.project_id }}\" }",
+        "options": {}
+      },
+      "id": "http-trigger-wf03",
+      "name": "HTTP: Trigger WF-03 (Trends)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 480]
+    }
+  ],
+  "connections": {
+    "Webhook: /scrape-complete": {
+      "main": [[{ "node": "Postgres: Get Unanalysed Posts", "type": "main", "index": 0 }]]
+    },
+    "Postgres: Get Unanalysed Posts": {
+      "main": [[{ "node": "Split In Batches (5)", "type": "main", "index": 0 }]]
+    },
+    "Split In Batches (5)": {
+      "main": [
+        [{ "node": "HTTP: Gemini Classify", "type": "main", "index": 0 }],
+        [{ "node": "HTTP: Trigger WF-03 (Trends)", "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP: Gemini Classify": {
+      "main": [[{ "node": "IF: Gemini Succeeded", "type": "main", "index": 0 }]]
+    },
+    "IF: Gemini Succeeded": {
+      "main": [
+        [{ "node": "Code: Parse AI Response", "type": "main", "index": 0 }],
+        [{ "node": "HTTP: Grok Fallback", "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP: Grok Fallback": {
+      "main": [[{ "node": "Code: Parse AI Response", "type": "main", "index": 0 }]]
+    },
+    "Code: Parse AI Response": {
+      "main": [[{ "node": "Postgres: Save Classification", "type": "main", "index": 0 }]]
+    },
+    "Postgres: Save Classification": {
+      "main": [[{ "node": "Split In Batches (5)", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}

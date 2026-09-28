@@ -1,0 +1,112 @@
+{
+  "name": "WF-03 Trend Aggregator",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "aggregate-trends",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "wh-aggregate",
+      "name": "Webhook: /aggregate-trends",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM trend_snapshots WHERE project_id = '{{ $json.body.project_id }}';",
+        "options": {}
+      },
+      "id": "pg-clear-old",
+      "name": "Postgres: Clear Old Snapshots",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [440, 300],
+      "credentials": {
+        "postgres": { "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID", "name": "MapsPy Postgres" }
+      },
+      "notes": "Runs once, BEFORE the per-topic insert loop, using the raw webhook payload. Simple clear-then-insert instead of ON CONFLICT since trend_snapshots has no unique constraint on (project_id, topic) yet."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  p.main_topic AS topic,\n  COUNT(DISTINCT p.competitor_id) AS competitor_count,\n  COUNT(*) AS occurrence_count\nFROM posts p\nJOIN competitors c ON c.id = p.competitor_id\nWHERE p.project_id = '{{ $('Webhook: /aggregate-trends').item.json.body.project_id }}'\nAND p.main_topic IS NOT NULL\nAND c.is_client = false\nGROUP BY p.main_topic\nORDER BY occurrence_count DESC",
+        "options": {}
+      },
+      "id": "pg-group-topics",
+      "name": "Postgres: Group By Topic",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [680, 300],
+      "credentials": {
+        "postgres": { "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID", "name": "MapsPy Postgres" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst total = items.reduce((sum, i) => sum + Number(i.json.occurrence_count), 0) || 1;\nreturn items.map(i => ({\n  json: {\n    ...i.json,\n    percentage: Math.round((Number(i.json.occurrence_count) / total) * 1000) / 10\n  }\n}));"
+      },
+      "id": "code-calc-percentage",
+      "name": "Code: Calculate Percentage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO trend_snapshots (id, project_id, topic, competitor_count, occurrence_count, percentage, calculated_at)\nVALUES (gen_random_uuid()::text, '{{ $('Webhook: /aggregate-trends').item.json.body.project_id }}', '{{ $json.topic }}', {{ $json.competitor_count }}, {{ $json.occurrence_count }}, {{ $json.percentage }}, NOW())",
+        "options": {}
+      },
+      "id": "pg-insert-snapshot",
+      "name": "Postgres: Insert Snapshot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1160, 300],
+      "credentials": {
+        "postgres": { "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID", "name": "MapsPy Postgres" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/api/webhooks/trends-ready",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "project_id", "value": "={{ $('Webhook: /aggregate-trends').item.json.body.project_id }}" },
+            { "name": "topic_count", "value": "={{ $items().length }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-notify-trends-ready",
+      "name": "HTTP: Notify Trends Ready",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1400, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: /aggregate-trends": {
+      "main": [[{ "node": "Postgres: Clear Old Snapshots", "type": "main", "index": 0 }]]
+    },
+    "Postgres: Clear Old Snapshots": {
+      "main": [[{ "node": "Postgres: Group By Topic", "type": "main", "index": 0 }]]
+    },
+    "Postgres: Group By Topic": {
+      "main": [[{ "node": "Code: Calculate Percentage", "type": "main", "index": 0 }]]
+    },
+    "Code: Calculate Percentage": {
+      "main": [[{ "node": "Postgres: Insert Snapshot", "type": "main", "index": 0 }]]
+    },
+    "Postgres: Insert Snapshot": {
+      "main": [[{ "node": "HTTP: Notify Trends Ready", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" }
+}
