@@ -2,10 +2,20 @@
 
 **MapSpy** is an end-to-end intelligence and content generation platform for local businesses. It autonomously monitors competitor Google Maps profiles ("Updates" / Local Posts), extracts real-time updates using an evasion-hardened headless Chromium scraper, analyzes marketing trends via AI, and automatically generates counter-marketing campaign ideas.
 
+
+## 🚀 Live Deployment
+
+| Component | Status | URL | Description |
+|---|---|---|---|
+| **Frontend Application** | 🟢 Live | [https://mapspy-app.vercel.app](https://mapspy-app.vercel.app) | Evaluator-facing React dashboard (no login required) |
+| **Backend API** | 🟢 Live | [https://mapspy-backend.onrender.com](https://mapspy-backend.onrender.com) | FastAPI REST service (Interactive Swagger docs: [`/docs`](https://mapspy-backend.onrender.com/docs)) |
+| **n8n Workflow Engine** | 🟢 Live | [https://mapspy-n8n.onrender.com](https://mapspy-n8n.onrender.com) | Autonomous orchestration & AI classification pipelines |
+
 ---
 
 ## 📑 Table of Contents
 
+- [Live Deployment](#-live-deployment)
 - [System Architecture](#-system-architecture)
 - [Key Features](#-key-features)
 - [Tech Stack](#-tech-stack)
@@ -16,6 +26,7 @@
   - [Manual / Local Service Setup](#manual--local-service-setup)
 - [Environment Variables](#-environment-variables)
 - [Production Deployment](#-production-deployment)
+  - [Live Endpoints](#live-endpoints)
   - [Backend & Workers on Render](#backend--workers-on-render)
   - [Frontend on Vercel](#frontend-on-vercel)
 - [Render 512MB Free Tier Optimizations](#-render-512mb-free-tier-optimizations)
@@ -213,7 +224,13 @@ VITE_API_BASE_URL=http://localhost:8000
 
 ## 🌐 Production Deployment
 
-The project is configured for seamless deployment on **Render** (backend services) and **Vercel** (frontend).
+The project is deployed and live across **Render** (backend services, PostgreSQL, n8n, scraper) and **Vercel** (frontend).
+
+### Live Endpoints
+- **Frontend Dashboard:** [https://mapspy-app.vercel.app](https://mapspy-app.vercel.app) *(No login required)*
+- **Backend API:** [https://mapspy-backend.onrender.com](https://mapspy-backend.onrender.com)
+- **API Documentation (Swagger):** [https://mapspy-backend.onrender.com/docs](https://mapspy-backend.onrender.com/docs)
+- **n8n Workflow Engine:** [https://mapspy-n8n.onrender.com](https://mapspy-n8n.onrender.com)
 
 ### Backend & Workers on Render
 The repository includes a root `render.yaml` Blueprint defining:
@@ -232,7 +249,7 @@ To deploy on Render:
 1. Import the `frontend/` directory into Vercel.
 2. Set Framework Preset to **Vite**.
 3. Add Environment Variable:
-   - `VITE_API_BASE_URL`: `https://your-backend-app.onrender.com`
+   - `VITE_API_BASE_URL`: `https://mapspy-backend.onrender.com`
 4. Deploy.
 
 ---
